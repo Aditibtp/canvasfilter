@@ -3,11 +3,12 @@
 class CanvasFilter extends HTMLElement {
   constructor() {
     super();
-
     let shadowRoot = this.attachShadow({mode: 'open'});
-    //this.shadowRoot = shadowRoot;
     shadowRoot.innerHTML = `<template id="canvas-filter-template">
       <style>
+      :host{
+        display: block;
+      }
       .tool-cont{
         display: flex;
         flex-direction: column;
@@ -158,12 +159,12 @@ class CanvasFilter extends HTMLElement {
         <div class="canvas-cont">
           <div class="btn-cont effect-toolbar">
             <button class="crop-btn">Crop</button>
-            <button class="upload-btn" onclick="uploadImage('event')">Upload</button>
-            <button class="crop-done" onclick="cropAreaSelelcted('event')">Done</button>
-            <button class="crop-done">Reset</button>
+            <button class="upload-btn">Upload</button>
+            <button class="crop-done">Done</button>
+            <button class="reset">Reset</button>
           </div>
           <div class="placeholder-div">
-            <input type="file" id="image-input" accept="image/*" onchange="imageUpload('event')" >
+            <input type="file" id="image-input" accept="image/*" >
             <img src="images/flowers.jpg" class="sample-img" />
             <canvas id="filter-canvas">
               An alternative text describing what your canvas displays.
@@ -197,55 +198,156 @@ class CanvasFilter extends HTMLElement {
         </div>
       </div>
     </template>`
-    console.log(shadowRoot)
-    const t = shadowRoot.querySelector('#canvas-filter-template');
-    var clone = document.importNode(t.content, true);
-    shadowRoot.appendChild(clone);
-    this.cropCanvas = shadowRoot.querySelector('#crop-canvas');
-    this.cropCanvasContext = this.cropCanvas.getContext('2d');
-    this.filterCanvas = shadowRoot.querySelector('#filter-canvas');
-    this.imageEle = shadowRoot.querySelector('img');
-    this.imageObjectSrc = "./images/flowers.jpg";
-    this.inputEle = shadowRoot.querySelector('input');
-    shadowRoot.querySelector('.crop-btn').addEventListener('click', this.createCropArea.bind(this), false);
-  }
+      const t = shadowRoot.querySelector('#canvas-filter-template');
+      var clone = document.importNode(t.content, true);
+      shadowRoot.appendChild(clone);
 
-  createCropArea () {
-    this.imageEle.classList.add('hide');
-    var imageObject = new Image();
-    imageObject.onload = ()=>{
-      this.cropCanvasContext.drawImage(imageObject, 0, 0, imageObject.width, imageObject.height, 0, 0, 568, 320);
-      var imageURI = this.cropCanvas.toDataURL("image/png");
+      this.cropCanvas = shadowRoot.querySelector('#crop-canvas');
+      this.cropCanvasContext = this.cropCanvas.getContext('2d');
+      this.filterCanvas = shadowRoot.querySelector('#filter-canvas');
+      this.imageObject = new Image();
+      this.imageEle = shadowRoot.querySelector('img');
+      this.imageObjectSrc = "./images/flowers.jpg";
+      this.inputEle = shadowRoot.querySelector('input');
 
-      this.imageObject.src = imageURI;
-      alert('hey')
-      this.cropCanvas.classList.add('show');
+      shadowRoot.querySelector('.crop-btn').addEventListener('click', this.createCropArea.bind(this), false);
+      shadowRoot.querySelector('.crop-done').addEventListener('click', this.cropAreaSelelcted.bind(this), false);
+      shadowRoot.querySelector('.upload-btn').addEventListener('click', this.triggerInput.bind(this), false);
+      this.inputEle.addEventListener('change', this.imageUpload.bind(this), false);
     }
-    imageObject.src = this.imageObjectSrc;
 
-    if(this.cropDiv){
-      this.cropDiv.remove();
+    triggerInput(){
+      this.inputEle.click();
     }
-    if(this.filterCanvas.visible){
-      this.filterCanvas.getContext('2d').clearRect();
+
+    imageUpload(event){
+      this.uploadImage(event);
     }
-    this.showElement(this.cropCanvas);
-    this.cropDiv = document.createElement('div');
-    //var canvasCont = document.querySelector(".canvas-cont");
-    this.shadowRoot.appendChild(this.cropDiv);
-    this.cropDiv.classList.add('crop-select');
-    this.cropDiv.setAttribute("draggable", "true");
-    this.cropDiv.addEventListener('dragover', function(e){
+
+    createCropArea () {
+      this.imageEle.classList.add('hide');
+      var imageObject = new Image();
+      imageObject.onload = ()=>{
+        this.cropCanvasContext.drawImage(imageObject, 0, 0, imageObject.width, imageObject.height, 0, 0, 568, 320);
+        var imageURI = this.cropCanvas.toDataURL("image/png");
+
+        this.imageObject.src = imageURI;
+        this.cropCanvas.classList.add('show');
+      }
+      imageObject.src = this.imageObjectSrc;
+
+      if(this.cropDiv){
+        this.cropDiv.remove();
+      }
+      if(this.filterCanvas.visible){
+        this.filterCanvas.getContext('2d').clearRect();
+      }
+      this.showElement(this.cropCanvas);
+      this.cropDiv = document.createElement('div');
+      //var canvasCont = document.querySelector(".canvas-cont");
+      this.shadowRoot.appendChild(this.cropDiv);
+      this.cropDiv.classList.add('crop-select');
+      this.cropDiv.setAttribute("draggable", "true");
+      this.cropDiv.addEventListener('dragover', function(e){
+        e.preventDefault();
+      }, false);
+      this.cropDiv.addEventListener('dragstart', this.cropAreaDragStartHandler.bind(this), false);
+      this.cropCanvas.addEventListener('dragover', function(e){
+        e.preventDefault();
+      }, false);
+      this.cropCanvas.addEventListener('drop', this.cropCanvasDropHandler.bind(this), false);
+    }
+
+    cropAreaDragStartHandler (e) {
+      e.stopPropagation();
+      this.deltaX = e.clientX - this.cropDiv.getBoundingClientRect().left;
+      this.deltaY = e.clientY - this.cropDiv.getBoundingClientRect().top;
+    }
+
+    cropCanvasDropHandler (e) {
       e.preventDefault();
-    }, false);
-    this.cropDiv.addEventListener('dragstart', this.cropAreaDragStartHandler.bind(this), false);
-    this.cropCanvas.addEventListener('dragover', function(e){
-      e.preventDefault();
-    }, false);
-    this.cropCanvas.addEventListener('drop', this.cropCanvasDropHandler.bind(this), false);
-  }
+      if (e.stopPropagation) {
+       e.stopPropagation(); // Stops some browsers from redirecting.
+      }
+      var position = this.cropDiv.getBoundingClientRect();
+      var cropWidth = this.cropDiv.offsetWidth;
+      var cropHeight = this.cropDiv.offsetHeight;
+      var finalLeft = position.left
+      var finalTop = position.top
+      var left = e.pageX - this.deltaX;
+      var top = e.pageY - this.deltaY;
+      this.cropDiv.style.top = top + "px";
+      this.cropDiv.style.left = left + "px";
+     return false;
+    }
 
-  
+   cropAreaSelelcted() {
+      var imageObject = new Image();
+      var cropWidth = this.cropDiv.offsetWidth;
+      var cropHeight = this.cropDiv.offsetHeight;
+      var placeholderDivCor = this.shadowRoot.querySelector(".placeholder-div").getBoundingClientRect();
+      var position = this.cropDiv.getBoundingClientRect();
+      this.cropDiv.style.display = 'none';
+      var cropLeftOffset = position.left - placeholderDivCor.left; //e.clientX;
+      var cropTopOffset = position.top - placeholderDivCor.top; //e.clientY;
+
+      this.cropCanvas.classList.add('crop-canvas-background');
+      this.filterCanvas.style.top = (cropTopOffset-1) + 'px';
+      this.filterCanvas.style.left = (cropLeftOffset-1) + 'px';
+      this.filterCanvas.height = cropHeight;
+      this.filterCanvas.width = cropWidth;
+      this.filterCanvas.style.display = 'block';
+      var filterContext = this.filterCanvas.getContext('2d');
+      imageObject.onload = function(){
+        filterContext.drawImage(imageObject, cropLeftOffset, cropTopOffset, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+      }
+      imageObject.src = this.cropCanvas.toDataURL("image/png");
+   }
+
+    showElement(element){
+      element.style.display = 'block'
+      element.classList.remove('hide');
+    }
+
+    uploadImage () {
+      this.clearCanvasArea();
+      var canvasSrc;
+      var file = this.inputEle.files[0];
+      var reader = new window.FileReader()
+      this.imageObject = new Image();
+      reader.onload = (event) => {
+        reader.onload = null
+        canvasSrc = event.target.result;
+        this.imageObject.src = canvasSrc;
+        this.imageObjectSrc = canvasSrc;
+      }
+      reader.readAsDataURL(file);
+
+      this.imageObject.onload = () => {
+        this.cropCanvasContext.drawImage(this.imageObject, 0, 0, this.imageObject.width, this.imageObject.height, 0, 0, 568, 320);
+      }
+      if(!this.cropCanvas.visible){
+        this.cropCanvas.style.display = 'block'
+      }
+      if(this.imageEle){
+        this.imageEle.style.display = 'none'
+      }
+    }
+
+    clearCanvasArea() {
+      this.filterApplied = false;
+      if(this.filterCanvas && this.filterCanvas.visible){
+        this.filterCanvas.getContext('2d').clearRect(0, 0, this.filterCanvas.width, this.filterCanvas.height);
+        this.filterCanvas.style.display = 'none';
+      }
+      if(this.cropDiv && this.cropDiv.visible){
+        this.cropDiv.remove()
+      }
+      if(this.cropCanvas.visible){
+        this.cropCanvasContext.clearRect(0, 0, 568, 320);
+      }
+    }
+  }
 
 customElements.define('canvas-filter', CanvasFilter);
 
